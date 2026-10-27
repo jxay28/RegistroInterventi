@@ -49,10 +49,6 @@ function getDashboardData(token) {
       var row = rows[r];
       var name = String(row[2] || '').trim();
       if (!name) continue;
-      if (!knownMachines[name.toLowerCase()]) {
-        knownMachines[name.toLowerCase()] = true;
-        machines.push(name);
-      }
       interventions.push({
         id: String(row[0] || ''),
         date: String(row[1] || ''),
@@ -321,3 +317,4 @@ function json_(payload) {
   return ContentService.createTextOutput(JSON.stringify(payload))
     .setMimeType(ContentService.MimeType.JSON);
 }
+
