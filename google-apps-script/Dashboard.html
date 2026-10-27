@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script src="https://www.gstatic.com/charts/loader.js"></script>
+  <style>
+    :root { color-scheme: dark; --bg:#0f172a; --panel:#1e293b; --line:#475569; --ink:#f1f5f9; --muted:#94a3b8; --teal:#22d3ee; --amber:#fbbf24; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:Arial,sans-serif; background:var(--bg); color:var(--ink); }
+    main { max-width:1200px; margin:auto; padding:24px; }
+    h1 { margin:0; font-size:28px; } .subtitle { color:var(--muted); margin:7px 0 22px; }
+    .filters { display:flex; gap:12px; flex-wrap:wrap; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px; }
+    label { color:var(--muted); font-size:13px; display:flex; flex-direction:column; gap:5px; }
+    select, input, button { background:#0f172a; border:1px solid var(--line); border-radius:8px; color:var(--ink); padding:9px 12px; font-size:14px; }
+    button { cursor:pointer; } button:hover { border-color:var(--teal); }
+    .metrics { display:grid; grid-template-columns:repeat(4,minmax(150px,1fr)); gap:14px; margin:18px 0; }
+    .metric, .panel { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px; }
+    .metric span { display:block; color:var(--muted); font-size:13px; } .metric strong { display:block; font-size:27px; margin-top:8px; color:var(--teal); }
+    .charts { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+    .chart { height:350px; } h2 { margin:0 0 10px; font-size:18px; }
+    table { width:100%; border-collapse:collapse; font-size:14px; } th,td { text-align:left; padding:10px 7px; border-bottom:1px solid var(--line); vertical-align:top; } th { color:var(--muted); font-weight:normal; }
+    .empty, .loading { padding:32px; text-align:center; color:var(--muted); }
+    .table-wrap { overflow-x:auto; } .small { color:var(--muted); font-size:13px; }
+    @media (max-width:760px) { main{padding:14px}.metrics,.charts{grid-template-columns:1fr 1fr}.charts{grid-template-columns:1fr}.chart{height:300px} }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Riepilogo manutenzioni</h1>
+  <p class="subtitle" id="updated">Caricamento dei dati...</p>
+  <div class="filters">
+    <label>Macchinario<select id="machine"><option value="">Tutti i macchinari</option></select></label>
+    <label>Periodo<select id="period"><option value="all">Tutto lo storico</option><option value="30">Ultimi 30 giorni</option><option value="90">Ultimi 90 giorni</option><option value="365">Ultimo anno</option></select></label>
+    <label>Da data<input id="dateFrom" type="date"></label>
+    <label>A data<input id="dateTo" type="date"></label>
+    <label style="justify-content:end"><button id="refresh">Aggiorna dati</button></label>
+  </div>
+  <section class="metrics">
+    <div class="metric"><span>Interventi</span><strong id="count">–</strong></div>
+    <div class="metric"><span>Tempo totale</span><strong id="total">–</strong></div>
+    <div class="metric"><span>Macchinari coinvolti</span><strong id="machines">–</strong></div>
+    <div class="metric"><span>Media per intervento</span><strong id="average">–</strong></div>
+  </section>
+  <section class="charts">
+    <div class="panel"><h2>Tempo per macchinario</h2><div id="pie" class="chart"></div></div>
+    <div class="panel"><h2>Numero di interventi</h2><div id="bar" class="chart"></div></div>
+  </section>
+  <section class="panel" style="margin-top:14px"><h2>Interventi registrati</h2><p class="small">Dal più recente al più vecchio, per data e ora di inizio.</p><div class="table-wrap"><table><thead><tr><th>Data</th><th>Macchinario</th><th>Orario</th><th>Durata</th><th>Lavoro eseguito</th><th>Note</th></tr></thead><tbody id="rows"></tbody></table></div></section>
+</main>
+<script>
+  var dashboardToken = '<?= dashboardToken ?>';
+  var raw = {machines:[], interventions:[]};
+  google.charts.load('current', {packages:['corechart']});
+  google.charts.setOnLoadCallback(loadData);
+  document.getElementById('machine').onchange = render;
+  document.getElementById('period').onchange = render;
+  document.getElementById('dateFrom').onchange = render;
+  document.getElementById('dateTo').onchange = render;
+  document.getElementById('refresh').onclick = loadData;
+
+  function loadData() {
+    document.getElementById('updated').textContent = 'Caricamento dei dati...';
+    google.script.run.withSuccessHandler(function(data) {
+      raw = data;
+      var select = document.getElementById('machine'); var selected = select.value;
+      select.innerHTML = '<option value="">Tutti i macchinari</option>';
+      data.machines.forEach(function(name) { var o=document.createElement('option'); o.value=name; o.textContent=name; select.appendChild(o); });
+      select.value = selected;
+      document.getElementById('updated').textContent = 'Dati aggiornati ora';
+      render();
+    }).withFailureHandler(function(error) {
+      document.getElementById('updated').textContent = 'Impossibile leggere il foglio: ' + error.message;
+    }).getDashboardData(dashboardToken);
+  }
+
+  function filtered() {
+    var selected = document.getElementById('machine').value;
+    var days = document.getElementById('period').value;
+    var min = new Date(); if (days !== 'all') min.setDate(min.getDate() - Number(days));
+    var from = document.getElementById('dateFrom').value;
+    var to = document.getElementById('dateTo').value;
+    var fromDate = from ? new Date(from + 'T00:00:00') : null;
+    var toDate = to ? new Date(to + 'T23:59:59') : null;
+    return raw.interventions.filter(function(i) {
+      if (selected && i.machine !== selected) return false;
+      var p=i.date.split('/'); var date=p.length===3 ? new Date(Number(p[2]),Number(p[1])-1,Number(p[0])) : null;
+      if (!date) return false;
+      if (days !== 'all' && date < min) return false;
+      if (fromDate && date < fromDate) return false;
+      if (toDate && date > toDate) return false;
+      return true;
+    });
+  }
+
+  function formatDuration(minutes) { var h=Math.floor(minutes/60), m=minutes%60; return h ? h+' h '+(m ? m+' min' : '') : m+' min'; }
+  function escapeHtml(v) { return String(v||'').replace(/[&<>'"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c];}); }
+
+  function interventionOrderValue(i) {
+    var match = String(i.date || '').trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (!match) return -1;
+    var day = Number(match[1]), month = Number(match[2]), year = Number(match[3]);
+    var date = new Date(Date.UTC(year, month - 1, day));
+    if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return -1;
+    var time = String(i.startTime || '').trim().match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+    var minutes = time && Number(time[1]) < 24 && Number(time[2]) < 60 ? Number(time[1]) * 60 + Number(time[2]) : 0;
+    return date.getTime() + minutes * 60000;
+  }
+
+  function render() {
+    var list = filtered(), total = list.reduce(function(s,i){return s+Number(i.durationMinutes||0);},0);
+    var byMachine = {};
+    list.forEach(function(i){ if(!byMachine[i.machine]) byMachine[i.machine]={minutes:0,count:0}; byMachine[i.machine].minutes+=Number(i.durationMinutes||0); byMachine[i.machine].count++; });
+    var names=Object.keys(byMachine).sort();
+    document.getElementById('count').textContent = list.length;
+    document.getElementById('total').textContent = formatDuration(total);
+    document.getElementById('machines').textContent = names.length;
+    document.getElementById('average').textContent = list.length ? formatDuration(Math.round(total/list.length)) : '–';
+    drawCharts(names, byMachine);
+    list.sort(function(a, b) { return interventionOrderValue(b) - interventionOrderValue(a); });
+    var body=document.getElementById('rows');
+    body.innerHTML = list.length ? list.map(function(i){return '<tr><td>'+escapeHtml(i.date)+'</td><td>'+escapeHtml(i.machine)+'</td><td>'+escapeHtml(i.startTime)+'–'+escapeHtml(i.endTime)+'</td><td>'+formatDuration(Number(i.durationMinutes||0))+'</td><td>'+escapeHtml(i.description)+'</td><td>'+escapeHtml(i.notes)+'</td></tr>';}).join('') : '<tr><td colspan="6" class="empty">Nessun intervento nel filtro selezionato.</td></tr>';
+  }
+
+  function drawCharts(names, values) {
+    var pie = [['Macchinario','Minuti']], bar = [['Macchinario','Interventi',{role:'style'}]];
+    names.forEach(function(n,idx){ pie.push([n,values[n].minutes]); bar.push([n,values[n].count,['#22d3ee','#fbbf24','#a78bfa','#34d399','#fb7185'][idx%5]]); });
+    var noData = names.length===0;
+    if(noData){ pie.push(['Nessun dato',1]); bar.push(['Nessun dato',0,'#475569']); }
+    new google.visualization.PieChart(document.getElementById('pie')).draw(google.visualization.arrayToDataTable(pie), {backgroundColor:'transparent',legend:{textStyle:{color:'#f1f5f9'}},pieSliceTextStyle:{color:'#0f172a'},chartArea:{width:'88%',height:'78%'},tooltip:{textStyle:{color:'#0f172a'}},slices:noData?{0:{color:'#475569'}}:{}});
+    new google.visualization.ColumnChart(document.getElementById('bar')).draw(google.visualization.arrayToDataTable(bar), {backgroundColor:'transparent',legend:'none',hAxis:{textStyle:{color:'#cbd5e1'},slantedText:true},vAxis:{minValue:0,textStyle:{color:'#cbd5e1'},gridlines:{color:'#475569'}},chartArea:{width:'85%',height:'70%'}});
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,36 @@
+REGISTRO INTERVENTI - VERSIONE 1.2
+
+1. Copia Registro-Interventi.apk sul telefono e aprilo.
+2. Se Android lo richiede, autorizza temporaneamente l'installazione di app da questa fonte.
+3. Installa e avvia Registro Interventi.
+
+L'app funziona subito e salva i dati sul telefono anche senza Internet.
+
+Per collegare Google Sheets:
+
+1. Segui il file GUIDA-GOOGLE.md.
+2. Quando richiesto, incolla in Google Apps Script il contenuto di Code.gs.
+3. Nell'app apri Google Sheets, inserisci l'indirizzo /exec e il medesimo codice segreto.
+
+IMPORTANTE
+
+- Conserva una copia di questi file.
+- Non condividere il codice segreto o l'indirizzo /exec.
+- Il foglio "Registro Interventi" sarà creato automaticamente nel tuo Google Drive.
+- Una reinstallazione completa dell'APK può cancellare l'archivio locale; i dati già sincronizzati restano nel foglio Google.
+
+AGGIORNAMENTO DALLA VERSIONE 1.0
+
+- Installa il nuovo APK sopra quello precedente: lo storico locale viene conservato.
+- Sostituisci anche il contenuto del vecchio Code.gs con quello nuovo.
+- In Google Apps Script pubblica una "Nuova versione" dello stesso deployment.
+- Conserva lo stesso SECRET_TOKEN e lo stesso indirizzo /exec.
+
+RIPRISTINO SU UN NUOVO TELEFONO
+
+- Aggiorna prima Codice.gs e pubblica una nuova versione del deployment.
+- Inserisci nell'app lo stesso indirizzo /exec e lo stesso codice segreto.
+- Premi "Ripristina da Google Sheets".
+- Il ripristino importa solo i dati mancanti e non crea duplicati.
+
+Compatibilità: Android 8.0 o successivo.
